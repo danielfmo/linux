@@ -88,6 +88,7 @@ struct amvideocap_global_data {
 	u64 wait_max_ms;
 };
 static struct amvideocap_global_data amvideocap_gdata;
+static struct ge2d_context_s *ge2d_amvideocap_context;
 static inline struct amvideocap_global_data *getgctrl(void)
 {
 	return &amvideocap_gdata;
@@ -226,16 +227,16 @@ static int amvideocap_get_input_format(struct vframe_s *vf)
 	/* pr_info("vf->type:0x%x\n", vf->type); */
 
 	if ((vf->type & VIDTYPE_VIU_422) == VIDTYPE_VIU_422) {
-		pr_info
-		("*****************Into VIDTYPE_VIU_422******************\n");
+		//pr_info
+		//("*****************Into VIDTYPE_VIU_422******************\n");
 		format = GE2D_FORMAT_S16_YUV422;
 	} else if ((vf->type & VIDTYPE_VIU_444) == VIDTYPE_VIU_444) {
-		pr_info
-		("*****************Into VIDTYPE_VIU_444******************\n");
+		//pr_info
+		//("*****************Into VIDTYPE_VIU_444******************\n");
 		format = GE2D_FORMAT_S24_YUV444;
 	} else if ((vf->type & VIDTYPE_VIU_NV21) == VIDTYPE_VIU_NV21) {
-		pr_info
-		("****************Into VIDTYPE_VIU_NV21******************\n");
+		//pr_info
+		//("****************Into VIDTYPE_VIU_NV21******************\n");
 		format = GE2D_FORMAT_M24_NV21;
 	}
 	return format;
@@ -256,7 +257,6 @@ static ssize_t amvideocap_YUV_to_RGB(
 	int v_index = (cur_index >> 16) & 0xff;
 	int input_x, input_y, input_width, input_height, intfmt;
 	unsigned long RGB_addr;
-	struct ge2d_context_s *context = create_ge2d_work_queue();
 	memset(&ge2d_config, 0, sizeof(struct config_para_ex_s));
 	intfmt = amvideocap_get_input_format(vf);
 
@@ -266,13 +266,13 @@ static ssize_t amvideocap_YUV_to_RGB(
 		pr_err("%s: failed to alloc y addr\n", __func__);
 		return -1;
 	}
-	pr_info("RGB_phy_addr:%x\n", (unsigned int)priv->phyaddr);
+	//pr_info("RGB_phy_addr:%x\n", (unsigned int)priv->phyaddr);
 	RGB_addr = (unsigned long)priv->vaddr;
 	if (!RGB_addr) {
 		pr_err("%s: failed to remap y addr\n", __func__);
 		return -1;
 	}
-	pr_info("RGB_addr:%lx\n", RGB_addr);
+	//pr_info("RGB_addr:%lx\n", RGB_addr);
 
 	if (vf == NULL) {
 		pr_err("%s: vf is NULL\n", __func__);
@@ -319,8 +319,8 @@ static ssize_t amvideocap_YUV_to_RGB(
 	canvas_read(y_index, &cs0);
 	canvas_read(u_index, &cs1);
 	canvas_read(v_index, &cs2);
-	pr_info("y_index=[0x%x]  u_index=[0x%x] cur_index:%x\n", y_index,
-			u_index, cur_index);
+	//pr_info("y_index=[0x%x]  u_index=[0x%x] cur_index:%x\n", y_index,
+	//		u_index, cur_index);
 	ge2d_config.src_planes[0].addr = cs0.addr;
 	ge2d_config.src_planes[0].w = cs0.width;
 	ge2d_config.src_planes[0].h = cs0.height;
@@ -330,8 +330,8 @@ static ssize_t amvideocap_YUV_to_RGB(
 	ge2d_config.src_planes[2].addr = cs2.addr;
 	ge2d_config.src_planes[2].w = cs2.width;
 	ge2d_config.src_planes[2].h = cs2.height;
-	pr_info("w=%d-height=%d cur_index:%x\n", cs0.width, cs0.height,
-			cur_index);
+	//pr_info("w=%d-height=%d cur_index:%x\n", cs0.width, cs0.height,
+	//		cur_index);
 
 	ge2d_config.src_key.key_enable = 0;
 	ge2d_config.src_key.key_mask = 0;
@@ -352,7 +352,7 @@ static ssize_t amvideocap_YUV_to_RGB(
 	ge2d_config.src_para.height = input_height;
 
 	canvas_read(canvas_idx, &cd);
-	pr_info("cd.addr:%x\n", (unsigned int)cd.addr);
+	//pr_info("cd.addr:%x\n", (unsigned int)cd.addr);
 	ge2d_config.dst_planes[0].addr = cd.addr;
 	ge2d_config.dst_planes[0].w = cd.width;
 	ge2d_config.dst_planes[0].h = cd.height;
@@ -371,12 +371,12 @@ static ssize_t amvideocap_YUV_to_RGB(
 	ge2d_config.dst_para.width = w;
 	ge2d_config.dst_para.height = h;
 
-	if (ge2d_context_config_ex(context, &ge2d_config) < 0) {
+	if (ge2d_context_config_ex(ge2d_amvideocap_context, &ge2d_config) < 0) {
 		pr_err("++ge2d configing error.\n");
 		return -1;
 	}
 
-	stretchblt_noalpha(context,
+	stretchblt_noalpha(ge2d_amvideocap_context,
 					   0,
 					   0,
 					   ge2d_config.src_para.width,
@@ -385,10 +385,6 @@ static ssize_t amvideocap_YUV_to_RGB(
 					   0,
 					   ge2d_config.dst_para.width,
 					   ge2d_config.dst_para.height);
-	if (context) {
-		destroy_ge2d_work_queue(context);
-		context = NULL;
-	}
 	if (canvas_idx)
 		canvas_pool_map_free_canvas(canvas_idx);
 	return 0;
@@ -417,14 +413,14 @@ static int amvideocap_capture_one_frame(
 	int curindex;
 	struct vframe_s *vf = vfput;
 	int ret = 0;
-	pr_info("%s:start vf=%p,index=%x\n", __func__, vf, index);
+	//pr_info("%s:start vf=%p,index=%x\n", __func__, vf, index);
 	if (!vf)
 		ret = amvideocap_capture_get_frame(priv, &vf, &curindex);
 	else
 		curindex = index;
 	if (ret < 0 || !vf)
 		return -EAGAIN;
-	pr_info("%s: get vf type=%x\n", __func__, vf->type);
+	//pr_info("%s: get vf type=%x\n", __func__, vf->type);
 
 #define CHECK_AND_SETVAL(want, def) ((want) > 0 ? (want) : (def))
 	ge2dfmt = CHECK_AND_SETVAL(priv->want.fmt, vf->type);
@@ -440,8 +436,8 @@ static int amvideocap_capture_one_frame(
 	amvideocap_capture_put_frame(priv, vf);
 
 	if (!ret) {
-		pr_info("%s: capture ok priv->want.fmt=%d\n", __func__,
-				priv->want.fmt);
+		//pr_info("%s: capture ok priv->want.fmt=%d\n", __func__,
+		//		priv->want.fmt);
 		priv->state = AMVIDEOCAP_STATE_FINISHED_CAPTURE;
 		priv->src.width = vf->width;
 		priv->src.height = vf->height;
@@ -454,7 +450,7 @@ static int amvideocap_capture_one_frame(
 			priv->out.fmt);	/* RGBn */
 	} else
 		priv->state = AMVIDEOCAP_STATE_ERROR;
-	pr_info("amvideocap_capture_one_frame priv->state=%d\n", priv->state);
+	//pr_info("amvideocap_capture_one_frame priv->state=%d\n", priv->state);
 	return ret;
 }
 
@@ -503,8 +499,8 @@ static int amvideocap_capture_one_frame_wait(
 			}
 		} else {
 			ret = amvideocap_capture_one_frame(priv, NULL, 0);
-			pr_info("amvideocap_capture_one_frame_wait ret=%d\n",
-					ret);
+			//pr_info("amvideocap_capture_one_frame_wait ret=%d\n",
+			//		ret);
 		}
 	} while (ret == -EAGAIN && time_before(jiffies, timeout));
 	ext_register_end_frame_callback(NULL);	/*del req */
@@ -700,22 +696,22 @@ static ssize_t amvideocap_read(struct file *file, char __user *buf,
 				HZ / 100 : HZ * 10;
 	}
 	if (!pos) {		/*trigger a new capture, */
-		pr_info("start amvideocap_read waitdelay=%d\n", waitdelay);
+		//pr_info("start amvideocap_read waitdelay=%d\n", waitdelay);
 		ret = amvideocap_capture_one_frame_wait(priv, waitdelay);
-		pr_info("amvideocap_read=%d,priv->state=%d,priv->vaddr=%p\n",
-				ret, priv->state, priv->vaddr);
+		//pr_info("amvideocap_read=%d,priv->state=%d,priv->vaddr=%p\n",
+		//		ret, priv->state, priv->vaddr);
 		if ((ret == 0)
 			&& (priv->state == AMVIDEOCAP_STATE_FINISHED_CAPTURE)
 			&& (priv->vaddr != NULL)) {
 			int size = min((int)count, (priv->out.byte_per_pix *
 						priv->out.width_aligned *
 						priv->out.height));
-			pr_info
-			("priv->out_width=%d priv->out_height=%d",
-			 priv->out.width, priv->out.height);
-			pr_info
-			(" priv->outfmt_byteppix=%d, size=%d\n",
-			 priv->out.byte_per_pix, size);
+			//pr_info
+			//("priv->out_width=%d priv->out_height=%d",
+			// priv->out.width, priv->out.height);
+			//pr_info
+			//(" priv->outfmt_byteppix=%d, size=%d\n",
+			// priv->out.byte_per_pix, size);
 #ifdef CONFIG_CMA
 			codec_mm_dma_flush(priv->vaddr,
 					cma_max_size * SZ_1M, DMA_FROM_DEVICE);
@@ -976,6 +972,8 @@ static int __init amvideocap_init_module(void)
 {
 
 	pr_info("amvideocap_init_module\n");
+	if (ge2d_amvideocap_context == NULL)
+		ge2d_amvideocap_context = create_ge2d_work_queue();
 	if ((platform_driver_register(&amvideocap_drv))) {
 		pr_err("failed to register amstream module\n");
 		return -ENODEV;
@@ -987,6 +985,10 @@ static int __init amvideocap_init_module(void)
 static void __exit amvideocap_remove_module(void)
 {
 	platform_driver_unregister(&amvideocap_drv);
+	if (ge2d_amvideocap_context) {
+		destroy_ge2d_work_queue(ge2d_amvideocap_context);
+		ge2d_amvideocap_context = NULL;
+	}
 	pr_info("amvideocap module removed.\n");
 }
 
