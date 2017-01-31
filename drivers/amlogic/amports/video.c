@@ -123,6 +123,9 @@ static u32 omx_pts;
 static int omx_pts_interval_upper = 11000;
 static int omx_pts_interval_lower = -5500;
 
+struct video_private {
+	struct vframe_s * ext_get_current;
+};
 
 bool omx_secret_mode = false;
 #define DEBUG_FLAG_FFPLAY	(1<<0)
@@ -4892,11 +4895,27 @@ static void _set_video_window(int *p)
  *********************************************************/
 static int amvideo_open(struct inode *inode, struct file *file)
 {
+	struct video_private* priv =
+		kzalloc(sizeof(struct video_private), GFP_KERNEL);
+
+	if (!priv)
+		return -ENOMEM;
+
+	file->private_data = priv;
+
 	return 0;
 }
 
 static int amvideo_release(struct inode *inode, struct file *file)
 {
+	struct video_private* priv = file->private_data;
+	if (priv->ext_get_current) {
+		ext_put_video_frame(priv->ext_get_current);
+	}
+
+	kfree(priv);
+	file->private_data = NULL;
+
 	if (blackout | force_blackout) {
 		/*	DisableVideoLayer();
 		don't need it ,it have problem on  pure music playing */
@@ -4908,6 +4927,7 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 {
 	long ret = 0;
 	void __user *argp = (void __user *)arg;
+	struct video_private* priv = file->private_data;
 
 	switch (cmd) {
 	case AMSTREAM_IOC_SET_OMX_VPTS:{
@@ -5190,6 +5210,98 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 
 	case AMSTREAM_IOC_SET_VSYNC_SLOW_FACTOR:
 		vsync_slow_factor = arg;
+		break;
+
+	/****************************************************************
+	Video frame ioctl
+	*****************************************************************/
+	case AMSTREAM_EXT_GET_CURRENT_VIDEOFRAME:
+		{
+			struct vframe_s *vf;
+			int canvas_index;
+
+			ret = -EEXIST;
+
+			if (!priv->ext_get_current) {
+				ret = ext_get_cur_video_frame(&vf, &canvas_index);
+
+				if (!ret) {
+					priv->ext_get_current = vf;
+					put_user(canvas_index, (int __user *)argp);
+				}
+			}
+		}
+		break;
+
+	case AMSTREAM_EXT_PUT_CURRENT_VIDEOFRAME:
+		{
+			if (priv->ext_get_current) {
+				ext_put_video_frame(priv->ext_get_current);
+
+				priv->ext_get_current = NULL;
+				ret = 0;
+			}
+			else {
+				ret = -EEXIST;
+			}
+		}
+		break;
+
+	case AMSTREAM_EXT_CURRENT_VIDEOFRAME_GET_GE2D_FORMAT:
+		{
+			u32 format = 0;
+
+			ret = -ENOENT;
+
+			if (priv->ext_get_current) {
+				if ((priv->ext_get_current->type & VIDTYPE_VIU_422) == VIDTYPE_VIU_422) {
+					format = GE2D_FORMAT_S16_YUV422;
+				}
+				else if ((priv->ext_get_current->type & VIDTYPE_VIU_444) == VIDTYPE_VIU_444) {
+					format = GE2D_FORMAT_S24_YUV444;
+				}
+				else if ((priv->ext_get_current->type & VIDTYPE_VIU_NV21) == VIDTYPE_VIU_NV21) {
+					format = GE2D_FORMAT_M24_NV21;
+				}
+
+				put_user(format, (u32 __user *)argp);
+
+				ret = 0;
+			}
+		}
+		break;
+
+	case AMSTREAM_EXT_CURRENT_VIDEOFRAME_GET_SIZE:
+		{
+			u64 size;
+
+			ret = -ENOENT;
+
+			if (priv->ext_get_current) {
+				size = ((u64)priv->ext_get_current->width << 32) |
+					   priv->ext_get_current->height;
+
+				put_user(size, (u64 __user *)argp);
+
+				ret = 0;
+			}
+		}
+		break;
+
+	case AMSTREAM_EXT_CURRENT_VIDEOFRAME_GET_CANVAS0ADDR:
+		{
+			u32 canvas0Addr;
+
+			ret = -ENOENT;
+
+			if (priv->ext_get_current) {
+				canvas0Addr = priv->ext_get_current->canvas0Addr;
+
+				put_user(canvas0Addr, (u32 __user *)argp);
+
+				ret = 0;
+			}
+		}
 		break;
 
 	default:
