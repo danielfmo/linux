@@ -123,7 +123,7 @@ static u32 omx_pts;
 static int omx_pts_interval_upper = 11000;
 static int omx_pts_interval_lower = -5500;
 
-struct video_private {
+struct amvideo_private {
 	struct vframe_s * ext_get_current;
 };
 
@@ -4895,8 +4895,8 @@ static void _set_video_window(int *p)
  *********************************************************/
 static int amvideo_open(struct inode *inode, struct file *file)
 {
-	struct video_private* priv =
-		kzalloc(sizeof(struct video_private), GFP_KERNEL);
+	struct amvideo_private* priv =
+		kzalloc(sizeof(struct amvideo_private), GFP_KERNEL);
 
 	if (!priv)
 		return -ENOMEM;
@@ -4908,7 +4908,7 @@ static int amvideo_open(struct inode *inode, struct file *file)
 
 static int amvideo_release(struct inode *inode, struct file *file)
 {
-	struct video_private* priv = file->private_data;
+	struct amvideo_private* priv = file->private_data;
 	if (priv->ext_get_current) {
 		ext_put_video_frame(priv->ext_get_current);
 	}
@@ -4927,7 +4927,7 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 {
 	long ret = 0;
 	void __user *argp = (void __user *)arg;
-	struct video_private* priv = file->private_data;
+	struct amvideo_private* priv = file->private_data;
 
 	switch (cmd) {
 	case AMSTREAM_IOC_SET_OMX_VPTS:{
@@ -5215,7 +5215,7 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 	/****************************************************************
 	Video frame ioctl
 	*****************************************************************/
-	case AMSTREAM_EXT_GET_CURRENT_VIDEOFRAME:
+	case AMVIDEO_EXT_GET_CURRENT_VIDEOFRAME:
 		{
 			struct vframe_s *vf;
 			int canvas_index;
@@ -5224,7 +5224,6 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 
 			if (!priv->ext_get_current) {
 				ret = ext_get_cur_video_frame(&vf, &canvas_index);
-
 				if (!ret) {
 					priv->ext_get_current = vf;
 					put_user(canvas_index, (int __user *)argp);
@@ -5233,11 +5232,10 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 		}
 		break;
 
-	case AMSTREAM_EXT_PUT_CURRENT_VIDEOFRAME:
+	case AMVIDEO_EXT_PUT_CURRENT_VIDEOFRAME:
 		{
 			if (priv->ext_get_current) {
 				ext_put_video_frame(priv->ext_get_current);
-
 				priv->ext_get_current = NULL;
 				ret = 0;
 			}
@@ -5247,7 +5245,7 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 		}
 		break;
 
-	case AMSTREAM_EXT_CURRENT_VIDEOFRAME_GET_GE2D_FORMAT:
+	case AMVIDEO_EXT_CURRENT_VIDEOFRAME_GET_GE2D_FORMAT:
 		{
 			u32 format = 0;
 
@@ -5263,15 +5261,13 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 				else if ((priv->ext_get_current->type & VIDTYPE_VIU_NV21) == VIDTYPE_VIU_NV21) {
 					format = GE2D_FORMAT_M24_NV21;
 				}
-
 				put_user(format, (u32 __user *)argp);
-
 				ret = 0;
 			}
 		}
 		break;
 
-	case AMSTREAM_EXT_CURRENT_VIDEOFRAME_GET_SIZE:
+	case AMVIDEO_EXT_CURRENT_VIDEOFRAME_GET_SIZE:
 		{
 			u64 size;
 
@@ -5280,15 +5276,13 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 			if (priv->ext_get_current) {
 				size = ((u64)priv->ext_get_current->width << 32) |
 					   priv->ext_get_current->height;
-
 				put_user(size, (u64 __user *)argp);
-
 				ret = 0;
 			}
 		}
 		break;
 
-	case AMSTREAM_EXT_CURRENT_VIDEOFRAME_GET_CANVAS0ADDR:
+	case AMVIDEO_EXT_CURRENT_VIDEOFRAME_GET_CANVAS0ADDR:
 		{
 			u32 canvas0Addr;
 
@@ -5296,9 +5290,7 @@ static long amvideo_ioctl(struct file *file, unsigned int cmd, ulong arg)
 
 			if (priv->ext_get_current) {
 				canvas0Addr = priv->ext_get_current->canvas0Addr;
-
 				put_user(canvas0Addr, (u32 __user *)argp);
-
 				ret = 0;
 			}
 		}
