@@ -838,7 +838,7 @@ static struct class amvideocap_class = {
 s32 amvideocap_register_memory(unsigned char *phybufaddr,
 					int phybufsize)
 {
-	pr_info("amvideocap_register_memory %p %d\n", phybufaddr, phybufsize);
+	//pr_info("amvideocap_register_memory %p %d\n", phybufaddr, phybufsize);
 	getgctrl()->phyaddr = (unsigned long)phybufaddr;
 	getgctrl()->size = (unsigned long)phybufsize;
 	getgctrl()->vaddr = 0;
